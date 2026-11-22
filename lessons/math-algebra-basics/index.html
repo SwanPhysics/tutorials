@@ -35,8 +35,8 @@
   .eq-sm { font-family: "Cambria Math", Cambria, "STIX Two Math", "Times New Roman", serif; font-size: 1.15rem; }
   var { font-style: italic; font-family: "Cambria Math", Cambria, "Times New Roman", serif; }
   .frac { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; font-size: .85em; margin: 0 .12em; line-height: 1.1; }
-  .frac > span:first-child { border-bottom: 2px solid currentColor; padding: 0 .15em; }
-  .frac > span:last-child { padding: 0 .15em; }
+  .frac > .num { display: block; border-bottom: 2px solid currentColor; padding: 0 .15em .05em; }
+  .frac > .den { display: block; padding: .05em .15em 0; }
   form.answer { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; justify-content: center; }
   form.answer label { font-size: 1.3rem; }
   input[type=text] { font-size: 1.3rem; width: 8.5rem; padding: .4rem .55rem; border: 2px solid #5c6673; border-radius: .4rem; color: var(--ink); background: #fff; }
@@ -192,12 +192,22 @@
   const N = (n) => (n < 0 ? MINUS + Math.abs(n) : String(n));
   const P = (n) => (n < 0 ? `(${N(n)})` : String(n));               // number in parentheses if negative
   const plus = (n) => (n < 0 ? ` ${MINUS} ${Math.abs(n)}` : ` + ${n}`); // "+ 3" or "− 3"
-  const F = (num, den) => `<span class="frac"><span class="sr-only">${String(num).replace(/<[^>]+>/g, "")} over ${String(den).replace(/<[^>]+>/g, "")}</span><span aria-hidden="true">${num}</span><span aria-hidden="true">${den}</span></span>`;
+  const F = (num, den) => `<span class="frac"><span class="sr-only">${String(num).replace(/<[^>]+>/g, "")} over ${String(den).replace(/<[^>]+>/g, "")}</span><span class="num" aria-hidden="true">${num}</span><span class="den" aria-hidden="true">${den}</span></span>`;
   const term = (c, v) => (c === 1 ? V(v) : c === -1 ? MINUS + V(v) : N(c) + V(v));
   const plusTerm = (c, v) => (c < 0 ? ` ${MINUS} ${term(-c, v)}` : ` + ${term(c, v)}`);
   const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; };
   const fracVal = (n, d) => { const g = gcd(n, d); n /= g; d /= g; if (d < 0) { n = -n; d = -d; } return d === 1 ? N(n) : (n < 0 ? MINUS : "") + F(Math.abs(n), d); };
-  const VARS = ["x", "a", "t", "m", "v", "F", "y", "n", "d", "k"];
+  // Letters that can't be mistaken for digits (no l, i, o, O, I, D, S, Z, B, G, g, q).
+  const VARS_EASY = ["a", "b", "c", "t", "x", "y", "z"];
+  const VARS_MORE = ["d", "h", "k", "m", "n", "p", "r", "u", "v", "w"];
+  const VARS_UPPER = ["A", "C", "E", "F", "H", "K", "L", "M", "N", "P", "R", "T", "V", "W", "X", "Y"];
+  let lastVar = null;
+  function pickVar(level) {
+    // level = topic position (0-based). Topics 1-3: familiar letters; 4-5: add more lower-case; 6+: add upper-case.
+    const pool = level < 3 ? VARS_EASY : level < 5 ? [...VARS_EASY, ...VARS_MORE] : [...VARS_EASY, ...VARS_MORE, ...VARS_UPPER, ...VARS_UPPER];
+    let v; do { v = pick(pool); } while (v === lastVar && pool.length > 1);
+    lastVar = v; return v;
+  }
   const nz = (a, b) => { let n; do { n = ri(a, b); } while (n === 0); return n; };
 
   // ---------- topics ----------
@@ -208,24 +218,24 @@
       idea: `<p>An equation is a balance: the two sides are equal. To find the unknown, get it <strong>alone</strong> on one side by undoing whatever is being done to it. <strong>Whatever you do to one side, do to the other</strong>, so the balance stays even.</p><p>Adding is undone by subtracting, and subtracting is undone by adding.</p>`,
       more: `<p>Example: <span class="eq-sm">${V("x")} + 2 = 6</span>. The 2 is <em>added</em> to ${V("x")}, so subtract 2 from both sides:</p><p class="eq-sm">${V("x")} + 2 ${MINUS} 2 = 6 ${MINUS} 2 &nbsp;&rarr;&nbsp; ${V("x")} = 4</p><p><strong>Check</strong> by putting the answer back in: 4 + 2 = 6. True, so ${V("x")} = 4 is right. Checking takes seconds and catches most mistakes.</p>`,
       forms: ["plus", "minus", "plusFront"],
-      fixed: () => mk.addsub("plus", "x", 2, 6),
-      gen: (form) => { const b = ri(2, 15), ans = ri(1, 20), v = pick(VARS); return mk.addsub(form, v, b, form === "minus" ? ans - b : ans + b); },
+      fixed: null,
+      gen: (form, v) => { const b = ri(2, 15), ans = ri(1, 20); return mk.addsub(form, v, b, form === "minus" ? ans - b : ans + b); },
     },
     {
       id: "muldiv", title: "Undo multiplication and division", need: 1,
       idea: `<p>A number written right next to a letter means <strong>multiply</strong>: <span class="eq-sm">2${V("a")}</span> means 2 times ${V("a")}. Undo multiplying by <strong>dividing both sides</strong> by that number.</p><p>A letter divided by a number, like <span class="eq-sm">${F(V("a"), 3)}</span>, is undone by <strong>multiplying both sides</strong>.</p>`,
       more: `<p>Example: <span class="eq-sm">2${V("a")} = 6</span>. ${V("a")} is <em>multiplied</em> by 2, so divide both sides by 2:</p><p class="eq-sm">${F("2" + V("a"), 2)} = ${F(6, 2)} &nbsp;&rarr;&nbsp; ${V("a")} = 3</p><p>Check: 2 &times; 3 = 6. True.</p><p>Physics example: in <span class="eq-sm">${V("F")} = ${V("m")}${V("a")}</span>, if <span class="eq-sm">${V("F")} = 12</span> N and <span class="eq-sm">${V("m")} = 4</span> kg, then <span class="eq-sm">12 = 4${V("a")}</span>, so <span class="eq-sm">${V("a")} = 3</span> m/s².</p>`,
       forms: ["times", "divide"],
-      fixed: () => mk.muldiv("times", "a", 2, 3),
-      gen: (form) => mk.muldiv(form, pick(VARS), ri(2, 9), ri(2, 12)),
+      fixed: null,
+      gen: (form, v) => mk.muldiv(form, v, ri(2, 9), ri(2, 12)),
     },
     {
       id: "twostep", title: "Two-step equations", need: 2,
       idea: `<p>When two things are done to the unknown, undo them in <strong>reverse order</strong>: first undo the adding or subtracting, then undo the multiplying or dividing.</p><p>It's like getting dressed: socks go on before shoes, so shoes come off first.</p>`,
       more: `<p>Example: <span class="eq-sm">2${V("F")} + 2 = 6</span>. To build the left side you would multiply ${V("F")} by 2, then add 2. So undo the "+ 2" first, then the "× 2".</p><ol><li>Subtract 2 from both sides: <span class="eq-sm">2${V("F")} = 4</span></li><li>Divide both sides by 2: <span class="eq-sm">${V("F")} = 2</span></li></ol><p>Check: 2(2) + 2 = 6. True.</p>`,
       forms: ["plus", "minus"],
-      fixed: () => mk.twostep("plus", "F", 2, 2, 2),
-      gen: (form) => mk.twostep(form, pick(VARS), ri(2, 9), ri(1, 12), ri(1, 10)),
+      fixed: null,
+      gen: (form, v) => mk.twostep(form, v, ri(2, 9), ri(1, 12), ri(1, 10)),
     },
     {
       id: "neg", title: "Negative numbers", need: 2,
@@ -233,7 +243,7 @@
       more: `<p>Example: <span class="eq-sm">${MINUS}3${V("t")} + 4 = ${MINUS}8</span></p><ol><li>Subtract 4 from both sides: <span class="eq-sm">${MINUS}3${V("t")} = ${MINUS}12</span></li><li>Divide both sides by ${MINUS}3: <span class="eq-sm">${V("t")} = 4</span> (negative ÷ negative is positive)</li></ol><p>Check: ${MINUS}3(4) + 4 = ${MINUS}12 + 4 = ${MINUS}8. True.</p><p>In physics, negative values usually mean a direction: for example, a ball thrown upward has acceleration ${V("a")} = ${MINUS}9.81 m/s² if "up" is positive.</p>`,
       forms: ["negcoef", "negans", "negdiv"],
       fixed: null,
-      gen: (form) => mk.neg(form, pick(VARS)),
+      gen: (form, v) => mk.neg(form, v),
     },
     {
       id: "frac", title: "Fractions as coefficients", need: 2,
@@ -241,7 +251,7 @@
       more: `<p>Example: <span class="eq-sm">${F(2, 3)}${V("x")} = 8</span></p><ol><li>Multiply both sides by ${F(3, 2)}: <span class="eq-sm">${F(3, 2)} · ${F(2, 3)}${V("x")} = ${F(3, 2)} · 8</span></li><li>${F(3, 2)} · ${F(2, 3)} = 1, so <span class="eq-sm">${V("x")} = ${F(24, 2)} = 12</span></li></ol><p>Shortcut: multiplying by ${F(3, 2)} is the same as dividing by 2 and multiplying by 3. Check: ${F(2, 3)} of 12 is 8. True.</p><p>Physics example: kinetic energy <span class="eq-sm">${V("KE")} = ${F(1, 2)}${V("m")}${V("v")}<sup>2</sup></span> has a fraction coefficient.</p>`,
       forms: ["fraccoef", "overplus", "fracminus"],
       fixed: null,
-      gen: (form) => mk.frac(form, pick(VARS)),
+      gen: (form, v) => mk.frac(form, v),
     },
     {
       id: "paren", title: "Parentheses", need: 2,
@@ -249,7 +259,7 @@
       more: `<p>Example: <span class="eq-sm">2(${V("x")} + 1) + 3(${V("x")} ${MINUS} 4) = 11</span></p><ol><li>Distribute: <span class="eq-sm">2${V("x")} + 2 + 3${V("x")} ${MINUS} 12 = 11</span></li><li>Combine like terms: <span class="eq-sm">5${V("x")} ${MINUS} 10 = 11</span></li><li>Add 10 to both sides: <span class="eq-sm">5${V("x")} = 21</span></li><li>Divide by 5: <span class="eq-sm">${V("x")} = ${F(21, 5)} = 4.2</span></li></ol><p>Common slip: multiplying only the first term, writing <span class="eq-sm">3(${V("x")} ${MINUS} 2)</span> as <span class="eq-sm">3${V("x")} ${MINUS} 2</span>.</p>`,
       forms: ["simple", "plusconst", "two", "halfparen"],
       fixed: null,
-      gen: (form) => mk.paren(form, pick(VARS)),
+      gen: (form, v) => mk.paren(form, v),
     },
     {
       id: "both", title: "Unknown on both sides", need: 2,
@@ -257,7 +267,7 @@
       more: `<p>Example: <span class="eq-sm">5${V("x")} ${MINUS} 3 = 2${V("x")} + 9</span></p><ol><li>Subtract 2${V("x")} from both sides: <span class="eq-sm">3${V("x")} ${MINUS} 3 = 9</span></li><li>Add 3 to both sides: <span class="eq-sm">3${V("x")} = 12</span></li><li>Divide by 3: <span class="eq-sm">${V("x")} = 4</span></li></ol><p>Check: left side 5(4) ${MINUS} 3 = 17; right side 2(4) + 9 = 17. Both sides match.</p>`,
       forms: ["bigleft", "bigright"],
       fixed: null,
-      gen: (form) => mk.both(form, pick(VARS)),
+      gen: (form, v) => mk.both(form, v),
     },
     {
       id: "formula", title: "Rearranging physics formulas", need: 2, choice: true,
@@ -494,18 +504,31 @@
     $("concept-more").innerHTML = t.more;
     $("concept-details").open = false;
     newProblem(true);
-    $("concept-h").focus();
+    focusProblem(true);
+  }
+
+  // Put keyboard focus in the answer box (or first choice) for every new problem.
+  // On a new topic, the box's description also includes the topic name and its short explanation,
+  // so screen-reader users hear them before the problem.
+  function focusProblem(newTopic) {
+    const extra = newTopic ? "progress-text concept-idea " : "";
+    if (state.current.choice) {
+      $("choice-form").querySelector("fieldset").setAttribute("aria-describedby", extra + "problem-prompt problem-eq");
+      document.querySelector('input[name="choice"]').focus();
+    } else {
+      $("answer").setAttribute("aria-describedby", extra + "problem-prompt problem-eq answer-error");
+      $("answer").focus();
+    }
   }
 
   function newProblem(first) {
     const t = TOPICS[state.order[state.pos]], r = topicResult(t.id);
     let p;
-    if (first && r.attempts === 0 && t.fixed && !state.practiceMode) p = t.fixed();
-    else {
+    {
       // Drill the form that was just missed; otherwise move through the forms.
       const form = r.missedForms.length && r.lastWrong ? r.missedForms[r.missedForms.length - 1] : t.forms[r.attempts % t.forms.length];
       let tries = 0;
-      do { p = t.gen(form); tries++; } while (state.current && p.eq === state.current.eq && tries < 20);
+      do { p = t.gen(form, pickVar(state.order[state.pos])); tries++; } while (state.current && p.eq === state.current.eq && tries < 20);
     }
     state.current = p; state.answered = false; state.usedHint = false;
     $("feedback").hidden = true; $("feedback").className = "feedback"; $("next-row").hidden = true;
@@ -595,7 +618,7 @@
       startTopic();
     } else {
       newProblem(false);
-      $("problem-h").focus();
+      focusProblem(false);
     }
   }
 
@@ -659,6 +682,7 @@
     clockStart();
     show("lesson");
     startTopic();
+    window.scrollTo(0, 0);
   }
   $("start-btn").addEventListener("click", () => begin(TOPICS.map((_, i) => i), false));
   $("answer-form").addEventListener("submit", (e) => {
